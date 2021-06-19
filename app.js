@@ -11,6 +11,7 @@ const VIEW_HEIGHT = DPI_HEIGHT - PADDING * 2
 const VIEW_WIDTH = DPI_WIDTH
 // Кол-во колонок
 const ROWS_COUNT = 5
+const CIRCLE_RADIUS = 10
 
 
 const COLORS = []
@@ -46,6 +47,7 @@ function chart (canvas, data) {
 
     // Подключение слушателя к холсту
     canvas.addEventListener("mousemove", mousemove)
+    canvas.addEventListener("mouseleave", mouseleave)
 
     // Прокси для отслеживания изменений
     const proxy = new Proxy({}, {
@@ -58,15 +60,21 @@ function chart (canvas, data) {
 
     // Метод реализация mousemove
     function mousemove({clientX, clientY}) {
-        proxy.mouse = {x:clientX, y:clientY}
+        const { left } = canvas.getBoundingClientRect()
+        proxy.mouse = {
+            x: (clientX - left) * 2, 
+            y:clientY
+        }
+    }
+
+    function mouseleave() {
+        proxy.mouse = null
     }
 
     function paint() {
 
         // Очистка холста   
         clear()
-
-        console.log(proxy.mouse)
 
         // Находим минимальные и максимальные значения
         const [yMin, yMax] = getMinMax(yData)
@@ -79,7 +87,7 @@ function chart (canvas, data) {
         // Линии "y" axis
         yAxis(ctx, yMin, yMax)
         // Линии "x" axis
-        xAxis(ctx, xData, xRatio)
+        xAxis(ctx, xData, xRatio, proxy)
 
         
         // Перебор колонок с данными для построения
@@ -93,6 +101,11 @@ function chart (canvas, data) {
                     Math.floor(DPI_HEIGHT - PADDING - y * yRatio)
                 ]
             })
+            for (const [x, y] of coords) {
+                if (isOver(proxy.mouse, x, coords.length)) {
+                    circle(ctx, [x,y], COLORS[index])
+                }
+            }
             // const rdmColor = '#' + (Math.random().toString(16) + '000000').substring(2,8).toUpperCase()
 
             // Отрисовывание линии
@@ -221,7 +234,7 @@ function yAxis(ctx, yMin, yMax) {
 }
 
 // Функция для рисования "X axis"
-function xAxis(ctx, data, xRatio) {
+function xAxis(ctx, data, xRatio, {mouse}) {
 
     // Кол-во колонок
     const colsCount = 6
@@ -232,20 +245,52 @@ function xAxis(ctx, data, xRatio) {
     ctx.beginPath()
 
     // Построение "X axis"
-    for (let i = 0; i < data.length;i += step) {
+    for (let i = 0; i < data.length; i++) {
 
         // Нахождение координаты x с учетом пропорции
         const x = i * xRatio + PADDING
-        // Отрисовка текста
-        ctx.fillText(new Date(data[i]).toDateString(), x, DPI_HEIGHT-5)
+
+        if ((i-1) % step === 0) {
+            // Отрисовка текста
+            ctx.fillText(new Date(data[i]).toDateString(), x, DPI_HEIGHT-5)
+        }
+       
+
+        if(isOver(mouse, x, data.length)) {
+            ctx.moveTo(x, PADDING)
+            ctx.lineTo(x, DPI_HEIGHT - PADDING)
+        }
     }
 
-
+    // Соединение точек
+    ctx.stroke()
     // Конец рисования
     ctx.closePath()
 }
 
+function isOver(mouse, x, length) {
 
+    if (!mouse) {
+        return false
+    }
+
+    const width = DPI_WIDTH / length
+    return Math.abs(x - mouse.x) < width / 2
+}
+
+function circle(ctx, [x,y], color) {
+    ctx.beginPath()
+
+    ctx.strokeStyle = color
+    ctx.fillStyle = '#fff'
+    
+    ctx.arc(x, y, CIRCLE_RADIUS, 0, Math.PI *2)
+
+    ctx.fill()
+    ctx.stroke()
+
+    ctx.closePath()
+}
 
 const graf = chart(document.getElementById("chart"), dataGraf)
 graf.init()
